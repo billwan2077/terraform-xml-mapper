@@ -1,0 +1,113 @@
+{
+  "description": "Cisco Catalyst Center SDA Terraform → XML mapping templates",
+  "version": "1.0.0",
+  "provider": "CiscoDevNet/catalystcenter",
+  "resources": {
+    "catalystcenter_fabric_site": {
+      "xml_root": "fabric-site",
+      "display_name": "Fabric Site",
+      "description": "SD-Access fabric site definition",
+      "attributes": [
+        {"tf_name": "site_id", "xml_tag": "siteId", "type": "string", "required": true, "description": "ID of the network hierarchy site"},
+        {"tf_name": "authentication_profile_name", "xml_tag": "authenticationProfileName", "type": "enum", "required": true,
+         "options": ["No Authentication", "Low Impact", "Open Authentication", "Closed Authentication"],
+         "description": "Authentication profile for this fabric"},
+        {"tf_name": "pub_sub_enabled", "xml_tag": "isPubSubEnabled", "type": "bool", "required": true,
+         "description": "Enable pub/sub for control nodes"}
+      ]
+    },
+    "catalystcenter_fabric_l2_virtual_network": {
+      "xml_root": "fabric-l2-virtual-network",
+      "display_name": "Fabric L2 Virtual Network (VLAN)",
+      "description": "Layer 2 virtual network / VLAN assignment in SD-Access fabric",
+      "attributes": [
+        {"tf_name": "fabric_id", "xml_tag": "fabricId", "type": "string", "required": true, "description": "ID of the fabric site"},
+        {"tf_name": "vlan_name", "xml_tag": "vlanName", "type": "string", "required": true, "description": "VLAN name"},
+        {"tf_name": "vlan_id", "xml_tag": "vlanId", "type": "int", "required": true, "description": "VLAN ID (2-4093)"},
+        {"tf_name": "traffic_type", "xml_tag": "trafficType", "type": "enum", "required": true,
+         "options": ["DATA", "VOICE"], "description": "Traffic type served by this VLAN"},
+        {"tf_name": "fabric_enabled_wireless", "xml_tag": "isFabricEnabledWireless", "type": "bool", "required": false,
+         "description": "Enable wireless on this VLAN"},
+        {"tf_name": "associated_l3_virtual_network_name", "xml_tag": "associatedLayer3VirtualNetworkName", "type": "string", "required": false,
+         "description": "Associated L3 virtual network name (for VN anchoring)"}
+      ]
+    },
+    "catalystcenter_fabric_l3_virtual_network": {
+      "xml_root": "fabric-l3-virtual-network",
+      "display_name": "Fabric L3 Virtual Network",
+      "description": "Layer 3 virtual network in SD-Access fabric",
+      "attributes": [
+        {"tf_name": "virtual_network_name", "xml_tag": "virtualNetworkName", "type": "string", "required": true,
+         "description": "Name of the L3 virtual network"},
+        {"tf_name": "fabric_ids", "xml_tag": "fabricIds", "type": "list", "required": false,
+         "description": "IDs of fabrics this VN is assigned to", "list_item_tag": "fabricId"},
+        {"tf_name": "anchored_site_id", "xml_tag": "anchoredSiteId", "type": "string", "required": false,
+         "description": "Fabric ID for VN anchoring"}
+      ]
+    },
+    "catalystcenter_fabric_device": {
+      "xml_root": "fabric-device",
+      "display_name": "Fabric Device",
+      "description": "Device added to SD-Access fabric with roles",
+      "attributes": [
+        {"tf_name": "network_device_id", "xml_tag": "networkDeviceId", "type": "string", "required": true,
+         "description": "Network device ID"},
+        {"tf_name": "fabric_id", "xml_tag": "fabricId", "type": "string", "required": true,
+         "description": "ID of the fabric site/zone"},
+        {"tf_name": "device_roles", "xml_tag": "deviceRoles", "type": "list", "required": true,
+         "options": ["CONTROL_PLANE_NODE", "EDGE_NODE", "BORDER_NODE"],
+         "description": "Roles of the fabric device", "list_item_tag": "role"},
+        {"tf_name": "border_types", "xml_tag": "borderTypes", "type": "list", "required": false,
+         "options": ["LAYER_2", "LAYER_3"],
+         "description": "Border types (for border devices)", "list_item_tag": "borderType"},
+        {"tf_name": "local_autonomous_system_number", "xml_tag": "localAutonomousSystemNumber", "type": "string", "required": false,
+         "description": "BGP local AS number (for border devices)"},
+        {"tf_name": "is_default_exit", "xml_tag": "isDefaultExit", "type": "bool", "required": false,
+         "description": "Set as default exit for the fabric"}
+      ]
+    },
+    "catalystcenter_fabric_port_assignments": {
+      "xml_root": "fabric-port-assignments",
+      "display_name": "Fabric Port Assignments",
+      "description": "Port assignments in SD-Access fabric",
+      "attributes": [
+        {"tf_name": "fabric_id", "xml_tag": "fabricId", "type": "string", "required": true,
+         "description": "ID of the fabric"},
+        {"tf_name": "network_device_id", "xml_tag": "networkDeviceId", "type": "string", "required": true,
+         "description": "Network device ID"},
+        {"tf_name": "port_assignments", "xml_tag": "portAssignment", "type": "list_object", "required": true,
+         "description": "List of port assignments",
+         "object_attributes": [
+           {"tf_name": "fabric_id", "xml_tag": "fabricId", "type": "string", "required": true,
+            "description": "ID of the fabric"},
+           {"tf_name": "network_device_id", "xml_tag": "networkDeviceId", "type": "string", "required": true,
+            "description": "Network device ID"},
+           {"tf_name": "interface_name", "xml_tag": "interfaceName", "type": "string", "required": true,
+            "description": "Interface name (e.g., GigabitEthernet1/0/2)"},
+           {"tf_name": "connected_device_type", "xml_tag": "connectedDeviceType", "type": "enum", "required": true,
+            "options": ["USER_DEVICE", "ACCESS_POINT", "TRUNKING_DEVICE", "AUTHENTICATOR_SWITCH", "SUPPLICANT_BASED_EXTENDED_NODE"],
+            "description": "Connected device type"},
+           {"tf_name": "data_vlan_name", "xml_tag": "dataVlanName", "type": "string", "required": false,
+            "description": "Data VLAN name"},
+           {"tf_name": "voice_vlan_name", "xml_tag": "voiceVlanName", "type": "string", "required": false,
+            "description": "Voice VLAN name"},
+           {"tf_name": "authenticate_template_name", "xml_tag": "authenticateTemplateName", "type": "string", "required": false,
+            "description": "Authenticate template name"}
+         ]
+        }
+      ]
+    },
+    "catalystcenter_fabric_zone": {
+      "xml_root": "fabric-zone",
+      "display_name": "Fabric Zone",
+      "description": "Fabric zone within a fabric site",
+      "attributes": [
+        {"tf_name": "site_id", "xml_tag": "siteId", "type": "string", "required": true,
+         "description": "ID of the network hierarchy site"},
+        {"tf_name": "authentication_profile_name", "xml_tag": "authenticationProfileName", "type": "enum", "required": true,
+         "options": ["No Authentication", "Low Impact", "Open Authentication", "Closed Authentication"],
+         "description": "Authentication profile for this fabric zone"}
+      ]
+    }
+  }
+}

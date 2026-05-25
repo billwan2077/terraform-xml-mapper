@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terraform → Cisco XML Mapper</title>
+<style>
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --surface2: #334155;
+    --border: #475569; --text: #e2e8f0; --text2: #94a3b8;
+    --primary: #38bdf8; --primary-dim: #0ea5e9;
+    --success: #22c55e; --warning: #eab308; --code: #1e1e2e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
+         background: var(--bg); color: var(--text); min-height: 100vh; }
+  .header { background: var(--surface); border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
+  .header h1 { font-size: 1.25rem; font-weight: 600; color: var(--primary); }
+  .header span { color: var(--text2); font-size: .85rem; }
+  .container { max-width: 1440px; margin: 0 auto; display: grid;
+               grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border);
+               min-height: calc(100vh - 56px); }
+  .panel { background: var(--bg); padding: 1.5rem; overflow-y: auto; }
+  .panel-left { border-right: none; }
+  .section-title { font-size: .85rem; font-weight: 600; color: var(--primary);
+                   text-transform: uppercase; letter-spacing: .05em;
+                   margin-bottom: 1rem; }
+  .input-area { margin-bottom: 1.5rem; }
+  textarea, select, input:not([type=file]) {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: .75rem;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: .85rem; transition: border .15s; }
+  textarea:focus, select:focus, input:focus { outline: none; border-color: var(--primary); }
+  textarea { min-height: 180px; resize: vertical; line-height: 1.5; }
+  .btn-group { display: flex; gap: .5rem; margin-top: .75rem; flex-wrap: wrap; }
+  button { padding: .6rem 1.25rem; border: none; border-radius: 8px;
+           font-size: .875rem; font-weight: 500; cursor: pointer;
+           transition: all .15s; display: inline-flex; align-items: center; gap: .5rem; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-primary { background: var(--primary); color: #0f172a; }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-dim); }
+  .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+  .btn-success { background: var(--success); color: #0f172a; }
+  .btn-warning { background: var(--warning); color: #0f172a; }
+
+  /* Upload area */
+  .upload-zone { border: 2px dashed var(--border); border-radius: 12px;
+                 padding: 2rem; text-align: center; cursor: pointer;
+                 transition: all .15s; margin-bottom: 1rem; }
+  .upload-zone:hover { border-color: var(--primary); background: rgba(56,189,248,.05); }
+  .upload-zone.dragover { border-color: var(--primary); background: rgba(56,189,248,.1); }
+  .upload-zone svg { width: 40px; height: 40px; color: var(--text2); margin-bottom: .5rem; }
+  .upload-zone p { color: var(--text2); font-size: .875rem; }
+  .upload-zone .hint { font-size: .75rem; color: var(--text2); margin-top: .25rem; }
+
+  /* Resource list */
+  .resource-list { display: flex; flex-direction: column; gap: .75rem; }
+  .resource-card { background: var(--surface); border: 1px solid var(--border);
+                   border-radius: 10px; padding: 1rem; transition: border-color .15s; }
+  .resource-card.active { border-color: var(--primary); }
+  .resource-header { display: flex; justify-content: space-between;
+                     align-items: start; margin-bottom: .75rem; cursor: pointer; }
+  .resource-type { font-weight: 600; color: var(--primary); font-size: .9rem; }
+  .resource-name { color: var(--text2); font-size: .8rem; font-family: monospace; 
+                   display: block; margin-top: 2px; }
+  .resource-badge { font-size: .7rem; background: var(--surface2); color: var(--text2);
+                    padding: 2px 8px; border-radius: 4px; }
+  .resource-body { display: none; }
+  .resource-card.expanded .resource-body { display: block; }
+
+  /* Form fields */
+  .field { margin-bottom: .75rem; }
+  .field label { display: block; font-size: .8rem; color: var(--text2);
+                 margin-bottom: .25rem; }
+  .field .req { color: #ef4444; margin-left: 2px; }
+  .field input, .field select { padding: .5rem .75rem; font-size: .8rem; }
+  .field .desc { font-size: .7rem; color: var(--text2); margin-top: 3px;
+                 font-style: italic; }
+  .field .enum-options { display: flex; flex-wrap: wrap; gap: .5rem;
+                         background: var(--bg); padding: .5rem; border-radius: 6px; }
+  .field .enum-options label { font-size: .8rem; cursor: pointer;
+                               padding: 4px 10px; border-radius: 4px;
+                               background: var(--surface2); transition: background .15s; }
+  .field .enum-options label.selected { background: var(--primary); color: #0f172a; }
+  .field .enum-options input[type=radio] { display: none; }
+
+  /* XML preview */
+  .xml-preview { background: var(--code); border: 1px solid var(--border);
+                 border-radius: 10px; padding: 1rem; }
+  .xml-preview-header { display: flex; justify-content: space-between;
+                        align-items: center; margin-bottom: .75rem; }
+  .xml-preview-header .title { font-size: .85rem; font-weight: 600; color: var(--primary); }
+  .xml-toolbar { display: flex; gap: .4rem; }
+  pre { margin: 0; white-space: pre-wrap; word-break: break-all;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: .8rem; line-height: 1.6; color: var(--text); }
+  pre .tag { color: #7dd3fc; }
+  pre .attr { color: #f9a8d4; }
+  pre .str { color: #86efac; }
+  pre .comment { color: #64748b; font-style: italic; }
+  pre .text { color: #e2e8f0; }
+
+  /* Utility */
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .mt-2 { margin-top: .5rem; }
+  .mb-2 { margin-bottom: .5rem; }
+  .text-sm { font-size: .8rem; color: var(--text2); }
+  .error-banner { background: rgba(239,68,68,.15); border: 1px solid #ef4444;
+                  border-radius: 8px; padding: .75rem; color: #fca5a5;
+                  margin-bottom: 1rem; font-size: .875rem; }
+  .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text2); }
+  .empty-state svg { width: 64px; height: 64px; opacity: .3; margin-bottom: 1rem; }
+  .loading { opacity: .6; pointer-events: none; }
+  .fade-in { animation: fadeIn .2s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); }
+                       to { opacity: 1; transform: translateY(0); } }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>⚡ Terraform → Cisco XML</h1>
+  <span>Network as Code · Catalyst Center SDA Mapper</span>
+</div>
+
+<div class="container">
+  <!-- LEFT PANEL: Input + Resources -->
+  <div class="panel panel-left">
+    <div class="section-title">① Input</div>
+
+    <!-- Upload zone -->
+    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+      </svg>
+      <p>点击上传 .tf 文件，或直接粘贴 Terraform 代码</p>
+      <div class="hint">支持 catalystcenter_fabric_* 等资源</div>
+    </div>
+    <input id="fileInput" type="file" accept=".tf" style="display:none"
+           onchange="handleFile(event)">
+
+    <div class="input-area">
+      <textarea id="tfInput" placeholder='resource "catalystcenter_fabric_site" "example" {
+  site_id                     = "8e6f7b3a-..."
+  authentication_profile_name = "No Authentication"
+  pub_sub_enabled             = false
+}' spellcheck="false"></textarea>
+      <div class="btn-group">
+        <button class="btn-primary" onclick="parseTf()">🔍 解析 Terraform</button>
+        <button class="btn-outline" onclick="document.getElementById('tfInput').value=''">清空</button>
+        <button class="btn-outline" onclick="loadSample()">📋 载入示例</button>
+      </div>
+    </div>
+
+    <div class="section-title">② 资源列表</div>
+    <div id="resourceList">
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <path d="M9 7h6M9 12h6M9 17h4"/>
+        </svg>
+        <p>解析 Terraform 后此处显示资源</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Form + XML -->
+  <div class="panel panel-right">
+    <div class="flex-between mb-2">
+      <div class="section-title" style="margin-bottom:0">③ 配置编辑 & XML 生成</div>
+    </div>
+
+    <!-- Resource type selector -->
+    <div class="field" id="typeSelector" style="display:none">
+      <label>选择资源进行编辑</label>
+      <select id="resourceTypeSelect" onchange="switchResource(this.value)"></select>
+    </div>
+
+    <!-- Error area -->
+    <div id="errorArea" style="display:none"></div>
+
+    <!-- Form -->
+    <div id="formArea">
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <path d="M9 12h6M12 9v6"/>
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+        </svg>
+        <p>选择资源后在表单中编辑配置</p>
+      </div>
+    </div>
+
+    <!-- XML Preview -->
+    <div id="xmlPreviewArea" style="display:none; margin-top: 1.5rem;">
+      <div class="section-title">XML 输出</div>
+      <div class="xml-preview fade-in">
+        <div class="xml-preview-header">
+          <div class="title" id="xmlTitle">预览</div>
+          <div class="xml-toolbar">
+            <button class="btn-outline" style="font-size:.75rem;padding:.35rem .75rem"
+                    onclick="copyXml()">📋 复制</button>
+            <button class="btn-outline" style="font-size:.75rem;padding:.35rem .75rem"
+                    onclick="downloadXml()">⬇ 下载</button>
+          </div>
+        </div>
+        <pre id="xmlOutput"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────
+let parsedResources = [];
+let resourceTypes = [];
+let currentResourceIdx = 0;
+let currentXml = '';
+
+// ── File handling ─────────────────────────────────────────────────
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    document.getElementById('tfInput').value = ev.target.result;
+    parseTf();
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+document.getElementById('uploadZone').addEventListener('dragover', (e) => {
+  e.preventDefault();
+  e.currentTarget.classList.add('dragover');
+});
+document.getElementById('uploadZone').addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+});
+document.getElementById('uploadZone').addEventListener('drop', (e) => {
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  const files = e.dataTransfer.files;
+  if (files.length > 0) {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      document.getElementById('tfInput').value = ev.target.result;
+      parseTf();
+    };
+    reader.readAsText(files[0]);
+  }
+});
+
+// ── API calls ─────────────────────────────────────────────────────
+async function parseTf() {
+  const content = document.getElementById('tfInput').value.trim();
+  if (!content) {
+    showError('请输入或粘贴 Terraform 代码');
+    return;
+  }
+
+  setLoading(true);
+  hideError();
+
+  try {
+    const formData = new FormData();
+    formData.append('content', content);
+    const res = await fetch('/api/parse', { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (data.error) { showError(data.error); setLoading(false); return; }
+
+    parsedResources = data.resources || [];
+    resourceTypes = data.resource_types || [];
+
+    renderResourceList();
+    if (parsedResources.length > 0) {
+      currentResourceIdx = 0;
+      showResourceForm(0);
+      document.getElementById('typeSelector').style.display = 'block';
+      populateResourceSelect();
+    }
+  } catch (err) {
+    showError('请求失败: ' + err.message);
+  }
+  setLoading(false);
+}
+
+async function generateXml() {
+  const res = parsedResources[currentResourceIdx];
+  if (!res) return;
+
+  const attrs = collectFormValues(res);
+
+  try {
+    const formData = new FormData();
+    formData.append('resource_type', res.type);
+    formData.append('resource_name', res.name);
+    formData.append('attrs_json', JSON.stringify(attrs));
+
+    const response = await fetch('/api/convert', { method: 'POST', body: formData });
+    if (response.status === 400) {
+      const err = await response.json();
+      showError(err.error);
+      return;
+    }
+    currentXml = await response.text();
+    renderXml(res);
+  } catch (err) {
+    showError('XML 生成失败: ' + err.message);
+  }
+}
+
+// ── Rendering ─────────────────────────────────────────────────────
+function renderResourceList() {
+  const el = document.getElementById('resourceList');
+  if (parsedResources.length === 0) {
+    el.innerHTML = '<div class="empty-state"><p>未找到资源</p></div>';
+    return;
+  }
+
+  el.innerHTML = parsedResources.map((r, i) => {
+    const mapped = r.mapped ? '' : '<span class="resource-badge" style="background:#eab30830;color:#eab308">⚠ 未映射</span>';
+    const active = i === currentResourceIdx ? 'active' : '';
+    return `<div class="resource-card fade-in ${active}" data-idx="${i}">
+      <div class="resource-header" onclick="switchResource(${i})">
+        <div>
+          <div class="resource-type">${escHtml(r.display_name)}</div>
+          <div class="resource-name">${escHtml(r.type)} · ${escHtml(r.name)}</div>
+        </div>
+        ${mapped}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function populateResourceSelect() {
+  const sel = document.getElementById('resourceTypeSelect');
+  sel.innerHTML = parsedResources.map((r, i) =>
+    `<option value="${i}">${escHtml(r.display_name)} — ${escHtml(r.name)}</option>`
+  ).join('');
+  sel.value = currentResourceIdx;
+}
+
+function switchResource(idx) {
+  idx = parseInt(idx);
+  if (isNaN(idx) || idx < 0 || idx >= parsedResources.length) return;
+  currentResourceIdx = idx;
+  document.getElementById('resourceTypeSelect').value = idx;
+  showResourceForm(idx);
+  renderResourceList();
+  hideError();
+}
+
+function showResourceForm(idx) {
+  const res = parsedResources[idx];
+  if (!res) return;
+
+  const el = document.getElementById('formArea');
+  const desc = res.description ? `<p class="text-sm mb-2">${escHtml(res.description)}</p>` : '';
+
+  let html = `<div class="fade-in">${desc}`;
+
+  for (const attr of (res.attr_defs || [])) {
+    html += renderField(attr, res.attributes[attr.tf_name], res);
+  }
+
+  html += `<div class="btn-group" style="margin-top:1rem">
+    <button class="btn-primary" onclick="generateXml()">🔄 生成 XML</button>
+  </div></div>`;
+
+  el.innerHTML = html;
+}
+
+function renderField(attr, value, resource) {
+  const req = attr.required ? '<span class="req">*</span>' : '';
+  const desc = attr.description ? `<div class="desc">${escHtml(attr.description)}</div>` : '';
+  const tfName = attr.tf_name;
+  const displayVal = value !== undefined && value !== null ? value : '';
+
+  let input = '';
+
+  if (attr.type === 'enum' && attr.options) {
+    // Radio buttons for enum
+    input = `<div class="enum-options">`;
+    for (const opt of attr.options) {
+      const selected = displayVal === opt ? 'selected' : '';
+      input += `<label class="${selected}">
+        <input type="radio" name="${tfName}" value="${escHtml(opt)}"
+               ${displayVal === opt ? 'checked' : ''}
+               onchange="this.parentElement.parentElement.querySelectorAll('label').forEach(l=>l.classList.remove('selected')); this.parentElement.classList.add('selected')">
+        ${escHtml(opt)}
+      </label>`;
+    }
+    input += `</div>`;
+  } else if (attr.type === 'bool') {
+    // Toggle for boolean
+    const checked = displayVal === true || displayVal === 'true' ? 'checked' : '';
+    const val = displayVal === true || displayVal === 'true' ? 'true' : 'false';
+    input = `<div style="display:flex;gap:.5rem;align-items:center">
+      <label style="font-size:.8rem;cursor:pointer;padding:4px 12px;border-radius:4px;
+                    background:${checked ? 'var(--primary)' : 'var(--surface2)'};
+                    color:${checked ? '#0f172a' : 'var(--text)'}">
+        <input type="radio" name="${tfName}" value="true"
+               ${checked ? 'checked' : ''}
+               onchange="updateBool(this, '${tfName}')">
+        true
+      </label>
+      <label style="font-size:.8rem;cursor:pointer;padding:4px 12px;border-radius:4px;
+                    background:${!checked ? 'var(--primary)' : 'var(--surface2)'};
+                    color:${!checked ? '#0f172a' : 'var(--text)'}">
+        <input type="radio" name="${tfName}" value="false"
+               ${!checked ? 'checked' : ''}
+               onchange="updateBool(this, '${tfName}')">
+        false
+      </label>
+    </div>`;
+  } else {
+    // Text input
+    input = `<input type="text" name="${tfName}" value="${escHtml(String(displayVal))}"
+                    placeholder="${escHtml(attr.xml_tag)}">`;
+  }
+
+  return `<div class="field">
+    <label>${escHtml(attr.xml_tag)} ${req}</label>
+    ${input}${desc}
+  </div>`;
+}
+
+function updateBool(el, name) {
+  const parent = el.closest('div');
+  parent.querySelectorAll('label').forEach(l => {
+    l.style.background = l.querySelector('input').checked ? 'var(--primary)' : 'var(--surface2)';
+    l.style.color = l.querySelector('input').checked ? '#0f172a' : 'var(--text)';
+  });
+}
+
+function collectFormValues(res) {
+  const attrs = {};
+  for (const attr of (res.attr_defs || [])) {
+    if (attr.type === 'enum' || attr.type === 'bool') {
+      const checked = document.querySelector(`input[name="${attr.tf_name}"]:checked`);
+      if (checked) {
+        attrs[attr.tf_name] = attr.type === 'bool'
+          ? (checked.value === 'true')
+          : checked.value;
+      }
+    } else {
+      const input = document.querySelector(`input[name="${attr.tf_name}"]`);
+      if (input) {
+        const val = input.value.trim();
+        if (val) {
+          if (attr.type === 'int') attrs[attr.tf_name] = parseInt(val, 10);
+          else if (attr.type === 'number') attrs[attr.tf_name] = parseFloat(val);
+          else attrs[attr.tf_name] = val;
+        }
+      }
+    }
+  }
+  return attrs;
+}
+
+function renderXml(res) {
+  document.getElementById('xmlPreviewArea').style.display = 'block';
+  document.getElementById('xmlTitle').textContent = `预览 · ${res.xml_root}.xml`;
+
+  // Syntax highlight
+  const highlighted = highlightXml(currentXml);
+  document.getElementById('xmlOutput').innerHTML = highlighted;
+}
+
+function highlightXml(xml) {
+  return xml
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="comment">$1</span>')
+    .replace(/(&lt;\/?\w[\w.-]*)/g, '<span class="tag">$1</span>')
+    .replace(/(\w[\w.-]*)(?=\s*=\s*&quot;)/g, '<span class="attr">$1</span>')
+    .replace(/&quot;([^&]*)&quot;/g, '<span class="str">&quot;$1&quot;</span>');
+}
+
+// ── Utilities ──────────────────────────────────────────────────────
+function copyXml() {
+  navigator.clipboard.writeText(currentXml).then(() => {
+    const btn = document.querySelector('.xml-toolbar button:first-child');
+    const orig = btn.textContent;
+    btn.textContent = '✅ 已复制';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+}
+
+function downloadXml() {
+  const res = parsedResources[currentResourceIdx];
+  if (!res) return;
+  const blob = new Blob([currentXml], { type: 'application/xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${res.xml_root || res.name}.xml`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorArea');
+  el.style.display = 'block';
+  el.innerHTML = `<div class="error-banner fade-in">⚠ ${escHtml(msg)}</div>`;
+}
+
+function hideError() {
+  document.getElementById('errorArea').style.display = 'none';
+}
+
+function setLoading(v) {
+  document.body.classList.toggle('loading', v);
+}
+
+function escHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function loadSample() {
+  document.getElementById('tfInput').value = `resource "catalystcenter_fabric_site" "site1" {
+  site_id                     = "8e6f7b3a-2b0b-4a7d-8b1c-0d4b1cd5e1b1"
+  authentication_profile_name = "No Authentication"
+  pub_sub_enabled             = false
+}
+
+resource "catalystcenter_fabric_l2_virtual_network" "vlan100" {
+  fabric_id               = "5e6f7b3a-2b0b-4a7d-8b1c-0d4b1cd5e1b1"
+  vlan_name               = "VLAN401"
+  vlan_id                 = 401
+  traffic_type            = "DATA"
+  fabric_enabled_wireless = false
+}
+
+resource "catalystcenter_fabric_l3_virtual_network" "vn1" {
+  virtual_network_name = "SDA_VN1"
+  fabric_ids           = ["5e6f7b3a-2b0b-4a7d-8b1c-0d4b1cd5e1b1"]
+}
+
+resource "catalystcenter_fabric_device" "edge1" {
+  network_device_id = "5e6f7b3a-2b0b-4a7d-8b1c-0d4b1cd5e1b1"
+  fabric_id         = "c4b85bb2-ce3f-4db9-a32b-e439a388ac2f"
+  device_roles      = ["EDGE_NODE"]
+}
+
+resource "catalystcenter_fabric_port_assignments" "port1" {
+  fabric_id         = "e02d9911-b0a7-435b-bb46-079d877d7b3e"
+  network_device_id = "5e6f7b3a-2b0b-4a7d-8b1c-0d4b1cd5e1b"
+  port_assignments = [
+    {
+      fabric_id                  = "c4b85bb2-ce3f-4db9-a32b-e439a388ac2f"
+      network_device_id          = "5e6f7b3a-2b0b-4a7d-8b1c-0d4b1cd5e1b1"
+      interface_name             = "GigabitEthernet1/0/2"
+      connected_device_type      = "USER_DEVICE"
+      data_vlan_name             = "DATA_VLAN"
+      voice_vlan_name            = "VOICE_VLAN"
+      authenticate_template_name = "No Authentication"
+    }
+  ]
+}`;
+}
+</script>
+
+</body>
+</html>
